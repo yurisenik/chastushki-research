@@ -1,0 +1,26 @@
+version: "3.9"
+
+services:
+  backend:
+    image: python:3.13-slim
+    working_dir: /app/backend
+    volumes:
+      - ./:/app
+    command: bash -lc "pip install -e '.[dev]' && uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_PORT:-8000} --reload"
+    env_file:
+      - .env.example
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+
+  frontend:
+    image: node:24-alpine
+    working_dir: /app/frontend
+    volumes:
+      - ./:/app
+    command: sh -lc "npm install && npm run dev -- --hostname 0.0.0.0 --port ${FRONTEND_PORT:-3000}"
+    env_file:
+      - .env.example
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      - backend

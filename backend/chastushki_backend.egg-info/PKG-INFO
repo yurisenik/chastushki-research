@@ -1,0 +1,52 @@
+Metadata-Version: 2.4
+Name: chastushki-backend
+Version: 0.1.0
+Summary: MVP backend for Chastushki generator
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: fastapi>=0.115.0
+Requires-Dist: pydantic>=2.9.0
+Requires-Dist: uvicorn>=0.30.0
+Provides-Extra: dev
+Requires-Dist: httpx>=0.27.0; extra == "dev"
+Requires-Dist: pytest>=8.3.0; extra == "dev"
+Requires-Dist: pytest-cov>=5.0.0; extra == "dev"
+Requires-Dist: ruff>=0.6.0; extra == "dev"
+
+# Chastushki Backend
+
+FastAPI backend for MVP generation, refinement, and history endpoints.
+
+## Setup venv (recommended)
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+## Run locally
+
+```bash
+source .venv/bin/activate
+uvicorn app.main:app --reload --port 8000
+```
+
+## Test and lint
+
+```bash
+source .venv/bin/activate
+pytest -q
+ruff check app tests
+```
+
+## Optional Makefile shortcuts
+
+```bash
+cd backend
+make install
+make run
+make test
+make lint
+```

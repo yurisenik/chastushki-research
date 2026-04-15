@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+app/__init__.py
+app/main.py
+app/schemas.py
+app/api/__init__.py
+app/api/routes.py
+app/services/__init__.py
+app/services/pipeline.py
+chastushki_backend.egg-info/PKG-INFO
+chastushki_backend.egg-info/SOURCES.txt
+chastushki_backend.egg-info/dependency_links.txt
+chastushki_backend.egg-info/requires.txt
+chastushki_backend.egg-info/top_level.txt
+tests/test_api_contracts.py

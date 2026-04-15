@@ -104,6 +104,6 @@
 
 ## Файлы проекта
 
-- `/home/senik/.openclaw/workspace/projects/chastushki-research/market_scan.md`
-- `/home/senik/.openclaw/workspace/projects/chastushki-research/technical_plan.md`
-- `/home/senik/.openclaw/workspace/projects/chastushki-research/summary.md`
+- `docs/01_market_scan.md`
+- `docs/02_technical_plan.md`
+- `docs/03_summary.md`
