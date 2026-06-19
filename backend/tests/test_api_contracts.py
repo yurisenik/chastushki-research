@@ -177,3 +177,29 @@ def test_generate_pack_returns_502_on_llm_failure():
 
     assert response.status_code == 502
     assert response.json()["detail"] == "generation_failed"
+
+
+def test_generate_pack_returns_422_unsafe_output_when_all_candidates_unsafe():
+    class AllUnsafeLLM(ChastushkaLLM):
+        def generate(self, request, suffix=""):
+            return [
+                ["А потом он крикнул: ебать,", "Как же я люблю рыбалку,", "Не догнать,", "Хуй с ним, пойду гулять."]
+                for _ in range(request.count)
+            ]
+
+    app.dependency_overrides[get_llm] = lambda: AllUnsafeLLM()
+    response = client.post(
+        "/v1/generate-pack",
+        json={
+            "occasion": "праздник",
+            "target": "друзья",
+            "facts": ["поют вместе"],
+            "tone": "funny",
+            "boldness": 2,
+            "safe_mode": True,
+            "count": 3,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "unsafe_output"

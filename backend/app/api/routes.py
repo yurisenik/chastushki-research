@@ -3,7 +3,8 @@ from fastapi.responses import PlainTextResponse
 
 from app.schemas import FavoriteRequest, GeneratePackRequest, HistoryResponse, Pack, RefineRequest
 from app.services.llm import ChastushkaLLM, LLMError, get_llm
-from app.services.pipeline import REFINE_SUFFIX, InMemoryPackStore, generate_pack, is_safe_input
+from app.services.moderation import ModerationError, is_safe_input
+from app.services.pipeline import REFINE_SUFFIX, InMemoryPackStore, generate_pack
 
 
 router = APIRouter()
@@ -26,6 +27,8 @@ def generate(
         pack = generate_pack(request, llm=llm)
     except LLMError as exc:
         raise HTTPException(status_code=502, detail="generation_failed") from exc
+    except ModerationError as exc:
+        raise HTTPException(status_code=422, detail="unsafe_output") from exc
     store.save_pack(pack)
     return pack
 
@@ -57,6 +60,8 @@ def refine(
         )
     except LLMError as exc:
         raise HTTPException(status_code=502, detail="generation_failed") from exc
+    except ModerationError as exc:
+        raise HTTPException(status_code=422, detail="unsafe_output") from exc
     refined.source_pack_id = source.pack_id
     store.save_pack(refined)
     return refined
