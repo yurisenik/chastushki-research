@@ -1,6 +1,5 @@
-from collections.abc import Iterable
-
 from app.schemas import Candidate, GeneratePackRequest, Pack
+from app.services.llm import ChastushkaLLM, LLMError
 
 
 REFINE_SUFFIX = {
@@ -62,30 +61,39 @@ class InMemoryPackStore:
         }
 
 
-def _compose_lines(request: GeneratePackRequest) -> Iterable[str]:
-    facts = ", ".join(request.facts) if request.facts else "жизнь хороша"
-    base = f"На {request.occasion} для {request.target}"
-    for index in range(request.count):
-        yield (
-            f"{base}: факт {index + 1} — {facts}. "
-            f"Тон: {request.tone}. Дерзость: {request.boldness}/5."
+def generate_pack(
+    request: GeneratePackRequest,
+    suffix: str = "",
+    *,
+    llm: ChastushkaLLM,
+) -> Pack:
+    """Сгенерировать пак частушек через LLM и упаковать в кандидаты.
+
+    Ранжирование пока заглушечное (порядок выдачи модели). Реальный скоринг
+    по форме — инкремент 2 (`08_implementation_plan.md`).
+    """
+    chastushki = llm.generate(request, suffix)
+    if len(chastushki) < request.count:
+        raise LLMError(
+            f"модель вернула {len(chastushki)} частушек, ожидалось {request.count}"
         )
+    chastushki = chastushki[: request.count]
 
-
-def generate_pack(request: GeneratePackRequest, suffix: str = "") -> Pack:
     candidates: list[Candidate] = []
-    for index, line in enumerate(_compose_lines(request)):
+    for index, lines in enumerate(chastushki):
         score = round(1 - (index * 0.03), 3)
         safe = request.safe_mode or request.boldness <= 3
-        text = f"{line} {suffix}".strip()
         candidates.append(
-            Candidate(id=f"cand-{index + 1}", text=text, score=score, safe=safe),
+            Candidate(
+                id=f"cand-{index + 1}",
+                text="\n".join(lines),
+                score=score,
+                safe=safe,
+            ),
         )
-    ranked = sorted(candidates, key=lambda item: item.score, reverse=True)
-    return Pack.new(ranked)
+    return Pack.new(candidates)
 
 
 def is_safe_input(request: GeneratePackRequest) -> bool:
     joined = " ".join([request.occasion, request.target, *request.facts]).lower()
     return not any(token in joined for token in DISALLOWED_TOKENS)
-

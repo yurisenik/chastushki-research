@@ -34,6 +34,10 @@
    - операционный playbook реализации MVP
    - фиксирует субагентный workflow, TDD-first цикл и формат документирования изменений
 
+8. `08_implementation_plan.md`
+   - инкрементальный план доведения bootstrap-каркаса до работающего MVP
+   - привязан к текущему коду: исходное состояние, decision records по scope, инкременты 1-6 и риски
+
 ### Дополнительные рабочие документы
 
 - `product_strategy.md`
@@ -84,7 +88,8 @@
 1. `03_summary.md`
 2. `04_design_doc.md`
 3. `05_prd_mvp.md`
-4. при необходимости `02_technical_plan.md`
+4. `08_implementation_plan.md`
+5. при необходимости `02_technical_plan.md`
 
 ## Что считать главным комплектом
 
@@ -104,10 +109,12 @@
 - продуктовая рамка собрана
 - MVP описан
 - founder memo собран
-- реализации ещё нет
+- собран bootstrap-каркас реализации (backend FastAPI, frontend Next.js, инфраструктура, CI)
+- инкрементальный план реализации MVP составлен (`08_implementation_plan.md`)
+- генерация текста пока заглушка, аудио-слой ещё не реализован
 
 ## Следующие естественные шаги
 
-1. `validation plan`
-2. `landing page spec`
-3. при необходимости go-to-market plan или testing plan
+1. инкремент 1 из `08_implementation_plan.md` — реальная LLM-генерация текста вместо заглушки
+2. инкременты 2-6 по `08_implementation_plan.md` (проверка формы, модерация, персистентность, форма ввода, аудио)
+3. при необходимости `validation plan` и `landing page spec`

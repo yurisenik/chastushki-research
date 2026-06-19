@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 from app.schemas import FavoriteRequest, GeneratePackRequest, HistoryResponse, Pack, RefineRequest
+from app.services.llm import ChastushkaLLM, LLMError, get_llm
 from app.services.pipeline import REFINE_SUFFIX, InMemoryPackStore, generate_pack, is_safe_input
 
 
@@ -15,16 +16,25 @@ def health() -> dict[str, str]:
 
 
 @router.post("/v1/generate-pack", response_model=Pack)
-def generate(request: GeneratePackRequest) -> Pack:
+def generate(
+    request: GeneratePackRequest,
+    llm: ChastushkaLLM = Depends(get_llm),
+) -> Pack:
     if request.safe_mode and not is_safe_input(request):
         raise HTTPException(status_code=422, detail="unsafe_input")
-    pack = generate_pack(request)
+    try:
+        pack = generate_pack(request, llm=llm)
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail="generation_failed") from exc
     store.save_pack(pack)
     return pack
 
 
 @router.post("/v1/refine", response_model=Pack)
-def refine(request: RefineRequest) -> Pack:
+def refine(
+    request: RefineRequest,
+    llm: ChastushkaLLM = Depends(get_llm),
+) -> Pack:
     try:
         source = store.get_pack(request.pack_id)
     except KeyError as exc:
@@ -39,7 +49,14 @@ def refine(request: RefineRequest) -> Pack:
         safe_mode=True,
         count=len(source.candidates),
     )
-    refined = generate_pack(source_request, suffix=REFINE_SUFFIX[request.action])
+    try:
+        refined = generate_pack(
+            source_request,
+            suffix=REFINE_SUFFIX[request.action],
+            llm=llm,
+        )
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail="generation_failed") from exc
     refined.source_pack_id = source.pack_id
     store.save_pack(refined)
     return refined

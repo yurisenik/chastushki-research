@@ -8,7 +8,7 @@ services:
       - ./:/app
     command: bash -lc "pip install -e '.[dev]' && uvicorn app.main:app --host 0.0.0.0 --port ${BACKEND_PORT:-8000} --reload"
     env_file:
-      - .env.example
+      - .env
     ports:
       - "${BACKEND_PORT:-8000}:8000"
 
@@ -19,7 +19,7 @@ services:
       - ./:/app
     command: sh -lc "npm install && npm run dev -- --hostname 0.0.0.0 --port ${FRONTEND_PORT:-3000}"
     env_file:
-      - .env.example
+      - .env
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:

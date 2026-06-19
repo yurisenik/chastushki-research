@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.services.llm import ChastushkaLLM, LLMError, get_llm
 
 
 client = TestClient(app)
@@ -98,7 +99,9 @@ def test_export_pack_as_text():
     exported = client.get(f"/v1/export/{created['pack_id']}?format=text")
     assert exported.status_code == 200
     assert "text/plain" in exported.headers["content-type"]
-    assert "На корпоратив" in exported.text
+    expected = "\n".join(candidate["text"] for candidate in created["candidates"])
+    assert exported.text == expected
+    assert exported.text.strip()
 
 
 def test_guardrails_block_disallowed_content_when_safe_mode():
@@ -149,3 +152,28 @@ def test_cors_preflight_for_generate_pack():
     )
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+def test_generate_pack_returns_502_on_llm_failure():
+    class FailingLLM(ChastushkaLLM):
+        def generate(self, request, suffix=""):
+            raise LLMError("boom")
+
+    # Подменяем заглушку из conftest на падающую LLM только для этого теста;
+    # autouse-фикстура снимет override после теста.
+    app.dependency_overrides[get_llm] = lambda: FailingLLM()
+    response = client.post(
+        "/v1/generate-pack",
+        json={
+            "occasion": "праздник",
+            "target": "друзья",
+            "facts": ["поют вместе"],
+            "tone": "funny",
+            "boldness": 2,
+            "safe_mode": True,
+            "count": 3,
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "generation_failed"
