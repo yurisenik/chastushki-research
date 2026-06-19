@@ -4,11 +4,11 @@ from fastapi.responses import PlainTextResponse
 from app.schemas import FavoriteRequest, GeneratePackRequest, HistoryResponse, Pack, RefineRequest
 from app.services.llm import ChastushkaLLM, LLMError, get_llm
 from app.services.moderation import ModerationError, is_safe_input
-from app.services.pipeline import REFINE_SUFFIX, InMemoryPackStore, generate_pack
+from app.services.pipeline import REFINE_SUFFIX, generate_pack
+from app.services.store import PackStore, get_store
 
 
 router = APIRouter()
-store = InMemoryPackStore()
 
 
 @router.get("/health")
@@ -20,6 +20,7 @@ def health() -> dict[str, str]:
 def generate(
     request: GeneratePackRequest,
     llm: ChastushkaLLM = Depends(get_llm),
+    store: PackStore = Depends(get_store),
 ) -> Pack:
     if request.safe_mode and not is_safe_input(request):
         raise HTTPException(status_code=422, detail="unsafe_input")
@@ -37,6 +38,7 @@ def generate(
 def refine(
     request: RefineRequest,
     llm: ChastushkaLLM = Depends(get_llm),
+    store: PackStore = Depends(get_store),
 ) -> Pack:
     try:
         source = store.get_pack(request.pack_id)
@@ -68,12 +70,12 @@ def refine(
 
 
 @router.get("/v1/history", response_model=HistoryResponse)
-def get_history() -> HistoryResponse:
+def get_history(store: PackStore = Depends(get_store)) -> HistoryResponse:
     return HistoryResponse(items=store.history())
 
 
 @router.post("/v1/favorites", response_model=Pack)
-def add_favorite(request: FavoriteRequest) -> Pack:
+def add_favorite(request: FavoriteRequest, store: PackStore = Depends(get_store)) -> Pack:
     try:
         return store.add_favorite(request.pack_id)
     except KeyError as exc:
@@ -81,12 +83,12 @@ def add_favorite(request: FavoriteRequest) -> Pack:
 
 
 @router.get("/v1/favorites", response_model=HistoryResponse)
-def get_favorites() -> HistoryResponse:
+def get_favorites(store: PackStore = Depends(get_store)) -> HistoryResponse:
     return HistoryResponse(items=store.favorites())
 
 
 @router.get("/v1/export/{pack_id}")
-def export_pack(pack_id: str, format: str = Query(default="text")):
+def export_pack(pack_id: str, format: str = Query(default="text"), store: PackStore = Depends(get_store)):
     try:
         pack = store.get_pack(pack_id)
     except KeyError as exc:
@@ -101,6 +103,6 @@ def export_pack(pack_id: str, format: str = Query(default="text")):
 
 
 @router.get("/v1/metrics")
-def metrics() -> dict[str, float]:
+def metrics(store: PackStore = Depends(get_store)) -> dict[str, float]:
     return store.metrics()
 

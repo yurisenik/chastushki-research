@@ -9,6 +9,7 @@ import pytest
 from app.main import app
 from app.schemas import GeneratePackRequest
 from app.services.llm import ChastushkaLLM, get_llm
+from app.services.store import InMemoryPackStore, get_store
 
 
 class StubLLM(ChastushkaLLM):
@@ -32,7 +33,15 @@ class StubLLM(ChastushkaLLM):
 
 @pytest.fixture(autouse=True)
 def stub_llm():
-    """Подменяет LLM-зависимость заглушкой на время каждого теста."""
+    """Подменяет LLM- и store-зависимости на время каждого теста.
+
+    Store — один in-memory инстанс на тест (общий для всех запросов теста),
+    чтобы контрактные тесты оставались детерминированными и не зависели от БД
+    (даже если в окружении задан DATABASE_URL, как в CI).
+    """
+    store = InMemoryPackStore()
     app.dependency_overrides[get_llm] = lambda: StubLLM()
+    app.dependency_overrides[get_store] = lambda: store
     yield
     app.dependency_overrides.pop(get_llm, None)
+    app.dependency_overrides.pop(get_store, None)

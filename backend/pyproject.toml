@@ -5,10 +5,13 @@ description = "MVP backend for Chastushki generator"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "alembic>=1.13.0",
     "anthropic>=0.69.0",
     "fastapi>=0.115.0",
     "openai>=1.40.0",
+    "psycopg[binary]>=3.1.0",
     "pydantic>=2.9.0",
+    "sqlalchemy>=2.0.0",
     "uvicorn>=0.30.0",
 ]
 

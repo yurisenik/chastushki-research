@@ -10,6 +10,22 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      DATABASE_URL: postgresql+psycopg://chastushki:chastushki@localhost:5432/chastushki
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: chastushki
+          POSTGRES_PASSWORD: chastushki
+          POSTGRES_DB: chastushki
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U chastushki -d chastushki"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

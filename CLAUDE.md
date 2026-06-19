@@ -39,14 +39,16 @@ Both services via Docker: `docker compose up` (root; reads `.env`). CI (`.github
 
 ### Backend (FastAPI)
 - `app/main.py` — app factory + CORS (frontend origins `localhost:3000` / `127.0.0.1:3000`) + router mount.
-- `app/api/routes.py` — the **7 endpoints**. The `Pack`-returning endpoints (`/v1/generate-pack`, `/v1/refine`, `/v1/favorites`) save to a module-level `InMemoryPackStore`. `/v1/refine` rebuilds a `GeneratePackRequest` from the stored source pack and applies a `REFINE_SUFFIX` to the prompt. `/v1/export/{pack_id}` supports `?format=text|json`. `/v1/metrics` derives a `usable_output_rate`. LLM is injected via `Depends(get_llm)` so tests can override it.
+- `app/api/routes.py` — the **7 endpoints**. The `Pack`-returning endpoints (`/v1/generate-pack`, `/v1/refine`, `/v1/favorites`) save to the store. The store is injected via `Depends(get_store)` (like `get_llm`, overridable in tests). `/v1/refine` rebuilds a `GeneratePackRequest` from the stored source pack and applies a `REFINE_SUFFIX` to the prompt. `/v1/export/{pack_id}` supports `?format=text|json`. `/v1/metrics` derives a `usable_output_rate`. LLM is injected via `Depends(get_llm)` so tests can override it.
 - `app/schemas.py` — Pydantic models. `Pack.new(...)` mints `uuid4` + UTC ISO timestamp. `GeneratePackRequest` validates `boldness` 0–5, `count` 3–20. **The API contract (paths + these schema fields) is treated as stable** — extend, don't break, unless a Decision Record in `docs/08_implementation_plan.md` records it. This protects the frontend and `tests/test_api_contracts.py`.
 - `app/services/llm.py` — the generation core. `ChastushkaLLM` is the ABC; `_TwoPassLLM` implements two-pass generation (plan → lines) once, delegating a single `_complete()` to each provider:
   - `ClaudeChastushkaLLM` (Anthropic; system prompt sent as a cached block via `cache_control`).
   - `OpenAIChastushkaLLM` (Chat Completions; system prompt as a plain message).
   - `get_llm()` is `@lru_cache`'d and FastAPI dependency; selects provider from `LLM_PROVIDER` env (`openai` default, or `anthropic`/`claude`). Clients are created lazily so importing the module needs no API key. All SDK/network failures are wrapped in `LLMError`, which routes map to HTTP 502.
 - `app/prompts.py` — system prompt is **deliberately constant** (no variable interpolation) to enable prompt caching; per-request data goes only in the user message. `build_plan_prompt` / `build_lines_prompt` construct the two user messages.
-- `app/services/pipeline.py` — `generate_pack()` runs the LLM, truncates to `request.count`, builds `Candidate`s with placeholder scoring (real form-scoring is increment 2). `InMemoryPackStore` holds history/by-id/favorites/metrics (lost on restart — persistence is a later increment). `is_safe_input()` is a one-token blocklist placeholder (real moderation is a later increment).
+- `app/services/pipeline.py` — `generate_pack()` runs the LLM, truncates to `request.count`, builds `Candidate`s with form-scoring (`app/services/form.py`, increment 2) and ranks them; applies safe-mode moderation (`app/services/moderation.py`, increment 3). `REFINE_SUFFIX` maps refine actions to prompt suffixes. (The store no longer lives here — see `store.py`.)
+- `app/services/store.py` — `PackStore` ABC + `InMemoryPackStore` (default, no DB) + `get_store()` (`@lru_cache`'d FastAPI dependency). `get_store()` returns a `PostgresPackStore` (see `app/services/db_store.py`) when `DATABASE_URL` is set, else `InMemoryPackStore`. Clear with `get_store.cache_clear()` if you change `DATABASE_URL` mid-process.
+- `app/db/` — SQLAlchemy 2.0 layer (increment 4). `session.py` exposes `Base` plus lazy module attrs `engine` / `SessionLocal` (PEP 562 `__getattr__`, built from `DATABASE_URL` on first access) and `get_db()`. `models.py` defines `packs` / `candidates` / `favorites`. Migrations live in `backend/alembic/` (`alembic upgrade head`, also `make migrate`); docker-compose runs migrations before uvicorn. `PostgresPackStore` derives `/v1/metrics` from the tables rather than counters.
 
 ### Frontend (Next.js 16 / React 19)
 - `src/app/` — App Router entry (`page.tsx`, `layout.tsx`).
@@ -55,12 +57,12 @@ Both services via Docker: `docker compose up` (root; reads `.env`). CI (`.github
 - Tests use Vitest + jsdom + Testing Library (`*.test.tsx`).
 
 ### Tests
-- Backend contract tests (`tests/test_api_contracts.py`) hit the real FastAPI app via `TestClient`, with the LLM replaced by `StubLLM` through `app.dependency_overrides[get_llm]` — see the autouse `stub_llm` fixture in `tests/conftest.py`. **No network or `ANTHROPIC_API_KEY` needed for the suite.** `tests/test_llm.py` tests the two-pass logic against fake Claude/OpenAI clients.
+- Backend contract tests (`tests/test_api_contracts.py`) hit the real FastAPI app via `TestClient`, with the LLM replaced by `StubLLM` and the store forced to a single in-memory instance via `app.dependency_overrides[get_llm]` / `[get_store]` — see the autouse `stub_llm` fixture in `tests/conftest.py`. **No network, `ANTHROPIC_API_KEY`, or DB needed for the contract suite**, even when `DATABASE_URL` is set (as in CI). `tests/test_db_store.py` exercises `PostgresPackStore` against a real Postgres and **skips when `DATABASE_URL` is unset** (CI's postgres service makes it run there). `tests/test_llm.py` tests the two-pass logic against fake Claude/OpenAI clients.
 - Frontend tests mirror this: component tests under `src/**/*.test.tsx`.
 
 ## Configuration / env
 
-`.env` (gitignored) — copy from `.env.example`. Key vars: `LLM_PROVIDER` (`openai` default | `anthropic`), `OPENAI_API_KEY`/`OPENAI_MODEL`, `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_BACKEND_URL`, `BACKEND_PORT`, `FRONTEND_PORT`. Note `get_llm` is cached; if you change `LLM_PROVIDER` mid-process, clear it (`get_llm.cache_clear()`).
+`.env` (gitignored) — copy from `.env.example`. Key vars: `LLM_PROVIDER` (`openai` default | `anthropic`), `OPENAI_API_KEY`/`OPENAI_MODEL`, `ANTHROPIC_API_KEY`, `NEXT_PUBLIC_BACKEND_URL`, `BACKEND_PORT`, `FRONTEND_PORT`, `DATABASE_URL` (empty → in-memory store; docker-compose sets it from `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`). Note `get_llm` and `get_store` are cached; if you change `LLM_PROVIDER` or `DATABASE_URL` mid-process, clear them (`get_llm.cache_clear()` / `get_store.cache_clear()`).
 
 ## Working on increments (see `docs/07_execution_playbook.md` + `docs/08_implementation_plan.md`)
 

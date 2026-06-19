@@ -3,7 +3,7 @@ VENV_DIR ?= .venv
 VENV_PYTHON := $(VENV_DIR)/bin/python
 VENV_PIP := $(VENV_DIR)/bin/pip
 
-.PHONY: venv install run test lint
+.PHONY: venv install run test lint migrate
 
 venv:
 	$(PYTHON) -m venv $(VENV_DIR)
@@ -19,4 +19,7 @@ test:
 	$(VENV_PYTHON) -m pytest -q
 
 lint:
-	$(VENV_PYTHON) -m ruff check app tests
+	$(VENV_PYTHON) -m ruff check app tests alembic
+
+migrate:
+	$(VENV_PYTHON) -m alembic upgrade head
