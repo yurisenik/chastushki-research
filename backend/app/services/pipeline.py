@@ -1,4 +1,5 @@
 from app.schemas import Candidate, GeneratePackRequest, Pack
+from app.services.form import score_candidate
 from app.services.llm import ChastushkaLLM, LLMError
 
 
@@ -67,10 +68,12 @@ def generate_pack(
     *,
     llm: ChastushkaLLM,
 ) -> Pack:
-    """Сгенерировать пак частушек через LLM и упаковать в кандидаты.
+    """Сгенерировать пак частушек через LLM, оценить по форме и ранжировать.
 
-    Ранжирование пока заглушечное (порядок выдачи модели). Реальный скоринг
-    по форме — инкремент 2 (`08_implementation_plan.md`).
+    Скоринг по форме (инкремент 2, `08_implementation_plan.md` Этап C/D):
+    composite из ритма и рифмы; кандидаты сортируются по убыванию score,
+    так что плохая форма тонет на дно. `safe` пока эвристический — реальная
+    модерация в инкременте 3.
     """
     chastushki = llm.generate(request, suffix)
     if len(chastushki) < request.count:
@@ -79,18 +82,20 @@ def generate_pack(
         )
     chastushki = chastushki[: request.count]
 
-    candidates: list[Candidate] = []
-    for index, lines in enumerate(chastushki):
-        score = round(1 - (index * 0.03), 3)
-        safe = request.safe_mode or request.boldness <= 3
-        candidates.append(
-            Candidate(
-                id=f"cand-{index + 1}",
-                text="\n".join(lines),
-                score=score,
-                safe=safe,
-            ),
+    safe = request.safe_mode or request.boldness <= 3
+    candidates: list[Candidate] = [
+        Candidate(
+            id="cand-placeholder",
+            text="\n".join(lines),
+            score=score_candidate("\n".join(lines)),
+            safe=safe,
         )
+        for lines in chastushki
+    ]
+    # ранжирование по форме (стабильно — равные score сохраняют порядок модели)
+    candidates.sort(key=lambda c: c.score, reverse=True)
+    for index, candidate in enumerate(candidates):
+        candidate.id = f"cand-{index + 1}"
     return Pack.new(candidates)
 
 
